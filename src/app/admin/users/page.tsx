@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { UserManager } from "@/components/admin/UserManager";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { DeleteUserButton } from "@/components/admin/DeleteUserButton";
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -47,6 +48,7 @@ export default async function AdminUsersPage() {
                 <TableHead>Role</TableHead>
                 <TableHead>Joined</TableHead>
                 <TableHead>Speaker Profile</TableHead>
+                <TableHead className="w-[80px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -70,11 +72,14 @@ export default async function AdminUsersPage() {
                       <span className="text-sm text-muted-foreground italic">None</span>
                     )}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <DeleteUserButton userId={u.id} userName={u.name} />
+                  </TableCell>
                 </TableRow>
               ))}
               {(!users || users.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>

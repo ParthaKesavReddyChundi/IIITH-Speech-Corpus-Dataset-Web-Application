@@ -85,3 +85,65 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const supabaseAdmin = createServiceClient();
+    
+    // Auth check
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { data: adminCheck } = await supabase.from("users").select("role").eq("auth_uid", user.id).single();
+    if ((adminCheck as any)?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+
+    if (!id) return NextResponse.json({ error: "User ID is required" }, { status: 400 });
+
+    // 1. Get the user's auth_uid and role
+    const { data: targetUser, error: fetchError } = await supabaseAdmin
+      .from("users")
+      .select("auth_uid, role")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !targetUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // 2. If student, we must delete recordings and speaker profile first (due to ON DELETE RESTRICT)
+    if ((targetUser as any).role === "student") {
+      const { data: speaker } = await supabaseAdmin
+        .from("speakers")
+        .select("id")
+        .eq("user_id", id)
+        .single();
+
+      if (speaker) {
+        // Delete all recordings for this speaker
+        await supabaseAdmin.from("recordings").delete().eq("speaker_id", (speaker as any).id);
+        // Delete the speaker profile
+        await supabaseAdmin.from("speakers").delete().eq("id", (speaker as any).id);
+      }
+    }
+
+    // 3. Delete from Supabase Auth (this cascades to public.users automatically)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser((targetUser as any).auth_uid);
+
+    if (deleteError) {
+      console.error("Auth deletion failed:", deleteError);
+      return NextResponse.json({ error: deleteError.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true, message: "User deleted successfully" });
+
+  } catch (error) {
+    console.error("User Deletion Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
