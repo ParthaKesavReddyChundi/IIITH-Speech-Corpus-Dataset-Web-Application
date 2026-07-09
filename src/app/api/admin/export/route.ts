@@ -42,7 +42,7 @@ export async function POST() {
             audio_path,
             duration_seconds,
             sentences ( id, text, sentence_number ),
-            speakers ( id, gender_default ),
+            speakers ( id, gender_default, users ( name ) ),
             languages ( id, name, code ),
             emotions ( id, name )
           `)
@@ -67,16 +67,30 @@ export async function POST() {
         for (const r of recordings) {
           if (!r.audio_path) continue;
           
+          const studentNameRaw = r.speakers?.users?.name || r.speakers?.id || "unknown";
+          const studentName = studentNameRaw.replace(/[^a-zA-Z0-9_ -]/g, "").trim();
+          const langName = (r.languages?.name || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+          const emotionName = (r.emotions?.name || "unknown").replace(/[^a-zA-Z0-9_-]/g, "");
+          const sentenceNum = String(r.sentences?.sentence_number || 0).padStart(3, '0');
+          
+          const fileName = `${sentenceNum}_${emotionName}.wav`;
+          
+          // Attach export path for the CSV
+          r.export_file_path = `audio/${studentName}/${langName}/${fileName}`;
+          
+          // Folder structure: audio/StudentName/LanguageName/fileName
+          const studentFolder = audioFolder?.folder(studentName);
+          const langFolder = studentFolder?.folder(langName);
+
           const { data: fileData, error: downloadError } = await supabase.storage
             .from("recordings")
             .download(r.audio_path);
 
           if (!downloadError && fileData) {
-            audioFolder?.file(`${r.id}.wav`, await fileData.arrayBuffer());
+            langFolder?.file(fileName, await fileData.arrayBuffer());
             
             // Stats
             totalDuration += (r.duration_seconds || 0);
-            const langName = r.languages?.name || "Unknown";
             languagesCount[langName] = (languagesCount[langName] || 0) + 1;
           }
           
