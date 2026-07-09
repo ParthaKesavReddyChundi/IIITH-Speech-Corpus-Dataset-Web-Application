@@ -46,6 +46,12 @@ export function PlaybackControls({
     }
   }, [audioBlob, onPlaybackComplete]);
 
+  useEffect(() => {
+    const handleToggleEvent = () => togglePlayback();
+    window.addEventListener("toggle-playback", handleToggleEvent);
+    return () => window.removeEventListener("toggle-playback", handleToggleEvent);
+  }, [isPlaying, progress]);
+
   const togglePlayback = () => {
     if (!audioRef.current) return;
 

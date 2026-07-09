@@ -28,6 +28,7 @@ export function RecordingsTable({
   const router = useRouter();
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const handleFilterChange = (key: string, value: string) => {
     const params = new URLSearchParams(window.location.search);
@@ -79,6 +80,36 @@ export function RecordingsTable({
     }
   };
 
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(recordings.map((r) => r.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const toggleSelect = (id: string, checked: boolean) => {
+    const newSet = new Set(selectedIds);
+    if (checked) newSet.add(id);
+    else newSet.delete(id);
+    setSelectedIds(newSet);
+  };
+
+  const handleBulkAction = async (action: "flag" | "delete") => {
+    const actionName = action === "flag" ? "flag" : "delete";
+    if (!confirm(`Are you sure you want to ${actionName} ${selectedIds.size} recordings?`)) return;
+
+    try {
+      for (const id of Array.from(selectedIds)) {
+        if (action === "flag") await flagRecording(id);
+        if (action === "delete") await deleteRecording(id);
+      }
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      alert("Bulk action encountered an error: " + e.message);
+    }
+  };
+
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
@@ -109,11 +140,37 @@ export function RecordingsTable({
         </select>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between bg-primary/10 border border-primary/20 p-3 rounded-md animate-fade-in">
+          <span className="text-sm font-medium text-primary">
+            {selectedIds.size} recording(s) selected
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => handleBulkAction("flag")} className="text-warning border-warning/50 hover:bg-warning/10">
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Flag Selected
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleBulkAction("delete")} className="text-destructive border-destructive/50 hover:bg-destructive/10">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-input bg-transparent cursor-pointer accent-primary" 
+                    checked={recordings.length > 0 && selectedIds.size === recordings.length}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                  />
+                </TableHead>
                 <TableHead>Sentence</TableHead>
                 <TableHead>Speaker</TableHead>
                 <TableHead>Audio</TableHead>
@@ -123,7 +180,15 @@ export function RecordingsTable({
             </TableHeader>
             <TableBody>
               {recordings.map((r) => (
-                <TableRow key={r.id}>
+                <TableRow key={r.id} className={selectedIds.has(r.id) ? "bg-primary/5" : ""}>
+                  <TableCell>
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-input bg-transparent cursor-pointer accent-primary" 
+                      checked={selectedIds.has(r.id)}
+                      onChange={(e) => toggleSelect(r.id, e.target.checked)}
+                    />
+                  </TableCell>
                   <TableCell className="max-w-md">
                     <div className="font-medium truncate" title={r.sentences?.text}>
                       {r.sentences?.text}
@@ -172,7 +237,7 @@ export function RecordingsTable({
               ))}
               {recordings.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No recordings found matching criteria.
                   </TableCell>
                 </TableRow>

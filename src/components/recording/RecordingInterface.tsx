@@ -59,7 +59,20 @@ export function RecordingInterface({
   const [gender, setGender] = useState<"male" | "female" | "other" | "">(
     defaultGender || ""
   );
-  const [emotionId, setEmotionId] = useState<string>("");
+  const [emotionId, setEmotionId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("preferred_emotion") || "";
+    }
+    return "";
+  });
+  
+  const handleEmotionChange = (id: string) => {
+    setEmotionId(id);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preferred_emotion", id);
+    }
+  };
+
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
   // Refs
@@ -84,6 +97,35 @@ export function RecordingInterface({
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [session.state]);
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (session.state === "idle" && gender !== "" && emotionId !== "") {
+          handleStartRecording();
+        } else if (session.state === "recording") {
+          handleStopRecording();
+        } else if (session.state === "converted" || session.state === "stopped") {
+          window.dispatchEvent(new Event("toggle-playback"));
+        }
+      } else if (e.code === "KeyR" || e.key === "r" || e.key === "R") {
+        if (session.state === "converted" || session.state === "stopped" || session.state === "error") {
+          handleRerecord();
+        }
+      } else if (e.code === "Enter") {
+        if ((session.state === "converted" || session.state === "stopped") && session.hasPlayedBack && emotionId && gender) {
+          handleSubmit();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [session.state, session.hasPlayedBack, emotionId, gender]);
 
   const updateSession = (updates: Partial<RecordingSession>) => {
     setSession((prev) => ({ ...prev, ...updates }));
@@ -300,7 +342,7 @@ export function RecordingInterface({
         <EmotionSelector 
           emotions={emotions} 
           value={emotionId} 
-          onChange={setEmotionId} 
+          onChange={handleEmotionChange} 
           disabled={session.state !== "idle" && session.state !== "error"} 
         />
       </div>
