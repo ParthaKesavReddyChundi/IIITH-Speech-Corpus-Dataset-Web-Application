@@ -48,13 +48,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Languages (te, en, hi) not properly seeded in database" }, { status: 500 });
     }
 
-    let currentMapping: { te: number; en: number; hi: number } | null = null;
+    let currentMapping: { te: number; en: number; hi: number; movie: number } | null = null;
     
     // We will collect raw sentences into these arrays
-    const toInsert: { [langCode: string]: Set<string> } = {
-      te: new Set(),
-      en: new Set(),
-      hi: new Set()
+    const toInsert: { [langCode: string]: { text: string; movie_name: string | null }[] } = {
+      te: [],
+      en: [],
+      hi: []
     };
 
     for (const row of rows) {
@@ -62,23 +62,27 @@ export async function POST(req: Request) {
 
       const firstCell = String(row[0] || "").trim().toLowerCase();
       
-      // Is this a header row?
       if (firstCell === "language" || firstCell === "original language") {
-        currentMapping = { te: -1, en: -1, hi: -1 };
+        currentMapping = { te: -1, en: -1, hi: -1, movie: -1 };
         for (let i = 0; i < row.length; i++) {
           const colName = String(row[i] || "").toLowerCase();
           if (colName.includes("telugu")) currentMapping.te = i;
           if (colName.includes("english")) currentMapping.en = i;
           if (colName.includes("hindi")) currentMapping.hi = i;
+          if (colName.includes("movie")) currentMapping.movie = i;
         }
         continue;
       }
 
       // If we have a mapping and the row has data, extract
       if (currentMapping) {
-        if (currentMapping.te !== -1 && row[currentMapping.te]) toInsert.te.add(String(row[currentMapping.te]).trim().normalize("NFC"));
-        if (currentMapping.en !== -1 && row[currentMapping.en]) toInsert.en.add(String(row[currentMapping.en]).trim().normalize("NFC"));
-        if (currentMapping.hi !== -1 && row[currentMapping.hi]) toInsert.hi.add(String(row[currentMapping.hi]).trim().normalize("NFC"));
+        const movieName = currentMapping.movie !== -1 && row[currentMapping.movie] 
+          ? String(row[currentMapping.movie]).trim() 
+          : null;
+
+        if (currentMapping.te !== -1 && row[currentMapping.te]) toInsert.te.push({ text: String(row[currentMapping.te]).trim().normalize("NFC"), movie_name: movieName });
+        if (currentMapping.en !== -1 && row[currentMapping.en]) toInsert.en.push({ text: String(row[currentMapping.en]).trim().normalize("NFC"), movie_name: movieName });
+        if (currentMapping.hi !== -1 && row[currentMapping.hi]) toInsert.hi.push({ text: String(row[currentMapping.hi]).trim().normalize("NFC"), movie_name: movieName });
       }
     }
 
@@ -86,7 +90,13 @@ export async function POST(req: Request) {
     let totalImported = 0;
 
     for (const langCode of ["te", "en", "hi"] as const) {
-      const texts = Array.from(toInsert[langCode]).filter(s => s.length > 0);
+      // Deduplicate by text
+      const uniqueTexts = new Map<string, string | null>();
+      for (const item of toInsert[langCode]) {
+        if (item.text.length > 0) uniqueTexts.set(item.text, item.movie_name);
+      }
+      
+      const texts = Array.from(uniqueTexts.entries());
       if (texts.length === 0) continue;
 
       const langId = langMap[langCode]!;
@@ -100,10 +110,10 @@ export async function POST(req: Request) {
       const existingTexts = new Set((existingData as any[])?.map((r: any) => r.normalized_text) || []);
       let maxSentenceNumber = (existingData as any[])?.reduce((max: number, r: any) => Math.max(max, r.sentence_number), 0) || 0;
 
-      const newSentences = texts.filter(s => !existingTexts.has(s));
+      const newSentences = texts.filter(([text]) => !existingTexts.has(text));
       
       if (newSentences.length > 0) {
-        const insertPayload = newSentences.map((text) => {
+        const insertPayload = newSentences.map(([text, movie_name]) => {
           maxSentenceNumber++;
           return {
             language_id: langId,
@@ -111,6 +121,7 @@ export async function POST(req: Request) {
             normalized_text: text,
             sentence_number: maxSentenceNumber,
             is_active: true,
+            movie_name: movie_name
           };
         });
 

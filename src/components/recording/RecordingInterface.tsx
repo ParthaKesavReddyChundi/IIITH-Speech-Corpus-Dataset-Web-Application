@@ -26,6 +26,7 @@ interface RecordingInterfaceProps {
     id: string;
     text: string;
     sentence_number: number;
+    movie_name?: string | null;
   };
   languageCode: string;
   languageId: string;
@@ -326,10 +327,15 @@ export function RecordingInterface({
   return (
     <div className="space-y-8 animate-fade-in max-w-2xl mx-auto">
       {/* Top Section: Sentence */}
-      <div className="p-8 rounded-2xl bg-card border border-border shadow-sm text-center min-h-[160px] flex items-center justify-center">
+      <div className="p-8 rounded-2xl bg-card border border-border shadow-sm text-center min-h-[160px] flex flex-col items-center justify-center">
         <p className={`text-3xl md:text-4xl font-semibold leading-tight ${fontClass}`}>
           {sentence.text}
         </p>
+        {sentence.movie_name && (
+          <p className="mt-4 text-sm text-muted-foreground font-medium bg-muted px-3 py-1 rounded-full">
+            🎬 {sentence.movie_name}
+          </p>
+        )}
       </div>
 
       {/* Middle Section: Metadata selectors (disabled during recording/uploading) */}

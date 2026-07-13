@@ -61,8 +61,8 @@ export default async function RecordPage({ params }: RecordPageProps) {
       p_language_id: langRecord.id 
     } as any)
     .single();
-  const nextSentenceData = nextSentenceResult.data as { sentence_id: string; text: string; sentence_number: number } | null;
-  const nextSentence = nextSentenceData ? { id: nextSentenceData.sentence_id, text: nextSentenceData.text, sentence_number: nextSentenceData.sentence_number } : null;
+  const nextSentenceData = nextSentenceResult.data as { sentence_id: string; text: string; sentence_number: number; movie_name: string | null } | null;
+  const nextSentence = nextSentenceData ? { id: nextSentenceData.sentence_id, text: nextSentenceData.text, sentence_number: nextSentenceData.sentence_number, movie_name: nextSentenceData.movie_name } : null;
   return (
     <div className="container-app py-8">
       <div className="flex items-center justify-between mb-8">
