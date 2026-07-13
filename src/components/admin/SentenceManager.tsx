@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Upload, FileText, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, Upload, FileText, CheckCircle2, Loader2, Trash2 } from "lucide-react";
 
 export function SentenceManager({ languages }: { languages: { id: string; name: string; code: string }[] }) {
   const router = useRouter();
   const [selectedLang, setSelectedLang] = useState<string>(languages[0]?.id || "");
   const [inputText, setInputText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [importMode, setImportMode] = useState<"single" | "multi">("single");
   const [status, setStatus] = useState<{ type: "success" | "error" | null; message: string }>({ type: null, message: "" });
 
@@ -107,9 +108,31 @@ export function SentenceManager({ languages }: { languages: { id: string; name: 
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm("DANGER: Are you sure you want to delete ALL sentences? This will also delete ALL recordings in the database! This action cannot be undone.")) return;
+
+    try {
+      setIsDeleting(true);
+      setStatus({ type: null, message: "" });
+
+      const res = await fetch("/api/admin/sentences/delete-all", { method: "POST" });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || "Failed to delete sentences");
+
+      setStatus({ type: "success", message: data.message });
+      router.refresh();
+    } catch (error: any) {
+      setStatus({ type: "error", message: error.message || "An unknown error occurred." });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <Card className="bg-card shadow-sm border-border">
-      <CardHeader>
+    <div className="space-y-6">
+      <Card className="bg-card shadow-sm border-border">
+        <CardHeader>
         <CardTitle>Import Sentences</CardTitle>
         <CardDescription>
           Upload an Excel grid to auto-detect languages, or paste raw text for a specific language.
@@ -219,5 +242,25 @@ export function SentenceManager({ languages }: { languages: { id: string; name: 
 
       </CardContent>
     </Card>
+
+    <Card className="bg-destructive/5 border-destructive/20 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-destructive">Danger Zone</CardTitle>
+        <CardDescription>
+          Permanently remove all transcripts and their associated recordings from the database.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button 
+          variant="destructive" 
+          onClick={handleDeleteAll} 
+          disabled={isDeleting || isUploading}
+        >
+          {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+          Delete All Transcripts & Recordings
+        </Button>
+      </CardContent>
+    </Card>
+    </div>
   );
 }
