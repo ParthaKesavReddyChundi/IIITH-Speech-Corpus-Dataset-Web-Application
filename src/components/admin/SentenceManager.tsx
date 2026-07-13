@@ -12,11 +12,17 @@ export function SentenceManager({ languages }: { languages: { id: string; name: 
   const [selectedLang, setSelectedLang] = useState<string>(languages[0]?.id || "");
   const [inputText, setInputText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [importMode, setImportMode] = useState<"single" | "multi">("single");
   const [status, setStatus] = useState<{ type: "success" | "error" | null; message: string }>({ type: null, message: "" });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (importMode === "multi") {
+      handleMultiImport(file);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -75,15 +81,59 @@ export function SentenceManager({ languages }: { languages: { id: string; name: 
     }
   };
 
+  const handleMultiImport = async (file: File) => {
+    try {
+      setIsUploading(true);
+      setStatus({ type: null, message: "" });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/sentences/import-multi", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to process Excel file");
+
+      setStatus({ type: "success", message: data.message });
+      router.refresh();
+    } catch (error: any) {
+      setStatus({ type: "error", message: error.message || "An unknown error occurred." });
+    } finally {
+      setIsUploading(false);
+      // reset file input if needed
+    }
+  };
+
   return (
     <Card className="bg-card shadow-sm border-border">
       <CardHeader>
         <CardTitle>Import Sentences</CardTitle>
         <CardDescription>
-          Upload a CSV/text file or paste sentences directly. One sentence per line.
+          Upload an Excel grid to auto-detect languages, or paste raw text for a specific language.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        
+        <div className="flex gap-4 border-b border-border pb-2">
+          <button 
+            className={`text-sm font-medium pb-2 ${importMode === "single" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground"}`}
+            onClick={() => setImportMode("single")}
+          >
+            Raw Text Paste
+          </button>
+          <button 
+            className={`text-sm font-medium pb-2 ${importMode === "multi" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground"}`}
+            onClick={() => setImportMode("multi")}
+          >
+            Smart Excel Import
+          </button>
+        </div>
+
+        {importMode === "single" && (
+          <div className="space-y-6">
         
         <div className="space-y-2">
           <label className="text-sm font-medium">Target Language</label>
@@ -139,6 +189,33 @@ export function SentenceManager({ languages }: { languages: { id: string; name: 
             Import Sentences
           </Button>
         </div>
+        </div>
+        )}
+
+        {importMode === "multi" && (
+          <div className="space-y-6 py-6 text-center border-2 border-dashed border-border rounded-lg bg-muted/20">
+            <div className="flex flex-col items-center justify-center space-y-3">
+              <Upload className="w-10 h-10 text-muted-foreground" />
+              <h3 className="text-lg font-medium">Upload Master Excel (.xlsx)</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                Upload your master spreadsheet. The system will auto-detect "Telugu", "Hindi", and "English" columns and route the transcripts perfectly.
+              </p>
+              <div className="mt-4 relative cursor-pointer">
+                <Button disabled={isUploading}>
+                  {isUploading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Select .xlsx File
+                </Button>
+                <input 
+                  type="file" 
+                  accept=".xlsx" 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
       </CardContent>
     </Card>
