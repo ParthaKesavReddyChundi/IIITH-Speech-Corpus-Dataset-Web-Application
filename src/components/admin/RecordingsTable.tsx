@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, AlertTriangle, Trash2, CheckCircle2 } from "lucide-react";
-import { flagRecording, deleteRecording } from "@/app/admin/recordings/actions";
+import { flagRecording, deleteRecording, hardDeleteRecording } from "@/app/admin/recordings/actions";
 
 export function RecordingsTable({
   recordings,
@@ -64,7 +64,7 @@ export function RecordingsTable({
     setPlayingId(null);
   };
 
-  const handleAction = async (action: "flag" | "delete", id: string) => {
+  const handleAction = async (action: "flag" | "delete" | "hard_delete", id: string) => {
     try {
       if (action === "flag") {
         if (confirm("Flag this recording for re-recording?")) {
@@ -73,6 +73,10 @@ export function RecordingsTable({
       } else if (action === "delete") {
         if (confirm("Are you sure you want to delete this recording? It will be marked as deleted.")) {
           await deleteRecording(id);
+        }
+      } else if (action === "hard_delete") {
+        if (confirm("PERMANENT DELETE: Are you sure? This cannot be undone and the audio file will be deleted forever.")) {
+          await hardDeleteRecording(id);
         }
       }
     } catch (e: any) {
@@ -95,14 +99,15 @@ export function RecordingsTable({
     setSelectedIds(newSet);
   };
 
-  const handleBulkAction = async (action: "flag" | "delete") => {
-    const actionName = action === "flag" ? "flag" : "delete";
+  const handleBulkAction = async (action: "flag" | "delete" | "hard_delete") => {
+    const actionName = action === "hard_delete" ? "permanently delete" : action;
     if (!confirm(`Are you sure you want to ${actionName} ${selectedIds.size} recordings?`)) return;
 
     try {
       for (const id of Array.from(selectedIds)) {
         if (action === "flag") await flagRecording(id);
         if (action === "delete") await deleteRecording(id);
+        if (action === "hard_delete") await hardDeleteRecording(id);
       }
       setSelectedIds(new Set());
     } catch (e: any) {
@@ -150,10 +155,17 @@ export function RecordingsTable({
               <AlertTriangle className="w-4 h-4 mr-2" />
               Flag Selected
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleBulkAction("delete")} className="text-destructive border-destructive/50 hover:bg-destructive/10">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Selected
-            </Button>
+            {currentStatus === "deleted" ? (
+              <Button variant="outline" size="sm" onClick={() => handleBulkAction("hard_delete")} className="text-destructive border-destructive hover:bg-destructive hover:text-white">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Hard Delete Selected
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => handleBulkAction("delete")} className="text-destructive border-destructive/50 hover:bg-destructive/10">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -228,9 +240,15 @@ export function RecordingsTable({
                       <Button variant="outline" size="sm" onClick={() => handleAction("flag", r.id)} title="Flag for re-recording" disabled={r.status === "flagged_for_rerecord" || r.status === "deleted"}>
                         <AlertTriangle className="w-4 h-4 text-warning" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleAction("delete", r.id)} title="Soft delete" disabled={r.status === "deleted"}>
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                      {r.status === "deleted" ? (
+                        <Button variant="outline" size="sm" onClick={() => handleAction("hard_delete", r.id)} title="Permanently delete" className="text-destructive border-destructive hover:bg-destructive hover:text-white">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => handleAction("delete", r.id)} title="Soft delete">
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

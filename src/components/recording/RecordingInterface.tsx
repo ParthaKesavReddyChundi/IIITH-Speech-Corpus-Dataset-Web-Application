@@ -27,6 +27,7 @@ interface RecordingInterfaceProps {
     text: string;
     sentence_number: number;
     movie_name?: string | null;
+    intended_emotion?: string | null;
   };
   languageCode: string;
   languageId: string;
@@ -68,11 +69,24 @@ export function RecordingInterface({
   });
   
   const handleEmotionChange = (id: string) => {
+    // Prevent changing if locked by intended_emotion
+    if (sentence.intended_emotion) return;
+    
     setEmotionId(id);
     if (typeof window !== "undefined") {
       localStorage.setItem("preferred_emotion", id);
     }
   };
+
+  // Lock intended emotion if present
+  useEffect(() => {
+    if (sentence.intended_emotion && emotions.length > 0) {
+      const matched = emotions.find(e => e.name.toLowerCase() === sentence.intended_emotion!.toLowerCase());
+      if (matched) {
+        setEmotionId(matched.id);
+      }
+    }
+  }, [sentence.intended_emotion, emotions]);
 
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
@@ -339,18 +353,25 @@ export function RecordingInterface({
       </div>
 
       {/* Middle Section: Metadata selectors (disabled during recording/uploading) */}
-      <div className="grid md:grid-cols-2 gap-6 p-6 rounded-xl bg-card/40 border border-border/50">
+      <div className="grid md:grid-cols-2 gap-6 p-6 rounded-xl bg-card/40 border border-border/50 relative">
         <GenderSelector 
           value={gender} 
           onChange={(v) => setGender(v)} 
           disabled={session.state !== "idle" && session.state !== "error"} 
         />
-        <EmotionSelector 
-          emotions={emotions} 
-          value={emotionId} 
-          onChange={handleEmotionChange} 
-          disabled={session.state !== "idle" && session.state !== "error"} 
-        />
+        <div className="relative">
+          {sentence.intended_emotion && (
+            <div className="absolute -top-3 left-3 bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full z-10 shadow-sm font-medium">
+              Intended Emotion (Locked)
+            </div>
+          )}
+          <EmotionSelector 
+            emotions={emotions} 
+            value={emotionId} 
+            onChange={handleEmotionChange} 
+            disabled={(session.state !== "idle" && session.state !== "error") || !!sentence.intended_emotion} 
+          />
+        </div>
       </div>
 
       {!isReadyToRecord && session.state === "idle" && (

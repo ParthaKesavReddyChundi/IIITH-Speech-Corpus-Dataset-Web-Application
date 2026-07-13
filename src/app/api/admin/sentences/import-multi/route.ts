@@ -48,10 +48,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Languages (te, en, hi) not properly seeded in database" }, { status: 500 });
     }
 
-    let currentMapping: { te: number; en: number; hi: number; movie: number } | null = null;
+    let currentMapping: { te: number; en: number; hi: number; movie: number; emotion: number } | null = null;
     
     // We will collect raw sentences into these arrays
-    const toInsert: { [langCode: string]: { text: string; movie_name: string | null }[] } = {
+    const toInsert: { [langCode: string]: { text: string; movie_name: string | null; intended_emotion: string | null }[] } = {
       te: [],
       en: [],
       hi: []
@@ -63,13 +63,14 @@ export async function POST(req: Request) {
       const firstCell = String(row[0] || "").trim().toLowerCase();
       
       if (firstCell === "language" || firstCell === "original language") {
-        currentMapping = { te: -1, en: -1, hi: -1, movie: -1 };
+        currentMapping = { te: -1, en: -1, hi: -1, movie: -1, emotion: -1 };
         for (let i = 0; i < row.length; i++) {
           const colName = String(row[i] || "").toLowerCase();
           if (colName.includes("telugu")) currentMapping.te = i;
           if (colName.includes("english")) currentMapping.en = i;
           if (colName.includes("hindi")) currentMapping.hi = i;
           if (colName.includes("movie")) currentMapping.movie = i;
+          if (colName.includes("emotion")) currentMapping.emotion = i;
         }
         continue;
       }
@@ -79,10 +80,14 @@ export async function POST(req: Request) {
         const movieName = currentMapping.movie !== -1 && row[currentMapping.movie] 
           ? String(row[currentMapping.movie]).trim() 
           : null;
+          
+        const intendedEmotion = currentMapping.emotion !== -1 && row[currentMapping.emotion]
+          ? String(row[currentMapping.emotion]).trim()
+          : null;
 
-        if (currentMapping.te !== -1 && row[currentMapping.te]) toInsert.te.push({ text: String(row[currentMapping.te]).trim().normalize("NFC"), movie_name: movieName });
-        if (currentMapping.en !== -1 && row[currentMapping.en]) toInsert.en.push({ text: String(row[currentMapping.en]).trim().normalize("NFC"), movie_name: movieName });
-        if (currentMapping.hi !== -1 && row[currentMapping.hi]) toInsert.hi.push({ text: String(row[currentMapping.hi]).trim().normalize("NFC"), movie_name: movieName });
+        if (currentMapping.te !== -1 && row[currentMapping.te]) toInsert.te.push({ text: String(row[currentMapping.te]).trim().normalize("NFC"), movie_name: movieName, intended_emotion: intendedEmotion });
+        if (currentMapping.en !== -1 && row[currentMapping.en]) toInsert.en.push({ text: String(row[currentMapping.en]).trim().normalize("NFC"), movie_name: movieName, intended_emotion: intendedEmotion });
+        if (currentMapping.hi !== -1 && row[currentMapping.hi]) toInsert.hi.push({ text: String(row[currentMapping.hi]).trim().normalize("NFC"), movie_name: movieName, intended_emotion: intendedEmotion });
       }
     }
 
@@ -91,9 +96,9 @@ export async function POST(req: Request) {
 
     for (const langCode of ["te", "en", "hi"] as const) {
       // Deduplicate by text
-      const uniqueTexts = new Map<string, string | null>();
+      const uniqueTexts = new Map<string, { movie_name: string | null; intended_emotion: string | null }>();
       for (const item of toInsert[langCode]) {
-        if (item.text.length > 0) uniqueTexts.set(item.text, item.movie_name);
+        if (item.text.length > 0) uniqueTexts.set(item.text, { movie_name: item.movie_name, intended_emotion: item.intended_emotion });
       }
       
       const texts = Array.from(uniqueTexts.entries());
@@ -113,7 +118,7 @@ export async function POST(req: Request) {
       const newSentences = texts.filter(([text]) => !existingTexts.has(text));
       
       if (newSentences.length > 0) {
-        const insertPayload = newSentences.map(([text, movie_name]) => {
+        const insertPayload = newSentences.map(([text, meta]) => {
           maxSentenceNumber++;
           return {
             language_id: langId,
@@ -121,7 +126,8 @@ export async function POST(req: Request) {
             normalized_text: text,
             sentence_number: maxSentenceNumber,
             is_active: true,
-            movie_name: movie_name
+            movie_name: meta.movie_name,
+            intended_emotion: meta.intended_emotion
           };
         });
 
