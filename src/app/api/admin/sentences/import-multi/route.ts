@@ -109,13 +109,13 @@ export async function POST(req: Request) {
       // Fetch existing
       const { data: existingData } = await supabaseAdmin
         .from("sentences")
-        .select("normalized_text, sentence_number")
+        .select("normalized_text, sentence_number, intended_emotion")
         .eq("language_id", langId);
 
-      const existingTexts = new Set((existingData as any[])?.map((r: any) => r.normalized_text) || []);
+      const existingTexts = new Set((existingData as any[])?.map((r: any) => `${r.normalized_text}||${r.intended_emotion || ""}`) || []);
       let maxSentenceNumber = (existingData as any[])?.reduce((max: number, r: any) => Math.max(max, r.sentence_number), 0) || 0;
 
-      const newSentences = texts.filter(([text]) => !existingTexts.has(text));
+      const newSentences = texts.filter(([text, meta]) => !existingTexts.has(`${text}||${meta.intended_emotion || ""}`));
       
       if (newSentences.length > 0) {
         const insertPayload = newSentences.map(([text, meta]) => {
